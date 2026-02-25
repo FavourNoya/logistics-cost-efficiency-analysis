@@ -1,0 +1,167 @@
+---
+title: "Communicate Application Work"
+author: "Favour Noya"
+format: docx
+editor: visual
+---
+
+# Set Working Directory
+
+getwd() setwd("/Users/favournoya")
+
+# Load Required Packages
+
+```{r}
+#| label: setup
+#| include: false
+
+library(tidyverse)
+library(readxl)
+library(knitr)
+library(scales)
+```
+
+# Load & View Raw Data
+
+```{r}
+data <- read_excel("/Users/favournoya/Documents/Whole Game Raw Data.xlsx")
+
+# Preview the data
+head(data)
+dim(data)
+colnames(data)
+```
+
+```{r}
+#| label: check-nas
+# Checking for missing values
+colSums(is.na(data))
+```
+
+# Data Cleaning
+
+```{r}
+# Assign -1 to any missing shipment ID
+data$number[is.na(data$number)] <- -1 
+
+# Filter out invalid shipments (where cost = 0)
+data <- filter(data, `($)` > 0)
+
+# Remove duplicate rows
+data <- distinct(data)
+```
+
+# Data Transformation
+
+```{r}
+# Add cost per KG-KM column
+data <- mutate(data, cost_per_kgkm = `($)` / `KG-KM`)
+
+# Select and rename relevant columns
+data <- data %>%
+  select(carier, `($)`, days, `longest diagonal`, cost_per_kgkm) %>%
+  rename(
+    Carrier_Name = carier,
+    Delivery_Cost = `($)`,
+    Delivery_Time = days
+  ) %>%
+  relocate(Delivery_Cost, .after = Carrier_Name) %>%
+  relocate(Delivery_Time, .before = `longest diagonal`) %>%
+  arrange(Delivery_Time) %>%
+  distinct()  # double-check duplicates removed
+```
+
+# Visual Insights
+
+## Are Shorter Delivery Times More Expensive?
+
+```{r}
+#| label: plot-cost-vs-time
+#| fig-cap: "Relationship between Delivery Time and Cost"
+ggplot(data, aes(x = Delivery_Time, y = Delivery_Cost)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Delivery Time vs Shipment Cost")
+```
+
+## Shipments by Carrier
+
+```{r}
+#| label: shipments-by-carrier
+#| fig-cap: "Total Shipments Completed by Each Carrier"
+data %>%
+  count(Carrier_Name) %>%
+  ggplot(aes(x = Carrier_Name, y = n, fill = Carrier_Name)) +
+  geom_col() +
+  labs(title = "Number of Shipments by Carrier")
+```
+
+## Average Cost per Shipment by Carrier
+
+```{r}
+#| label: avg-cost-carrier
+#| fig-cap: "Average Cost Per Shipment by Carrier"
+data %>%
+  group_by(Carrier_Name) %>%
+  summarize(Average_Cost = mean(Delivery_Cost, na.rm = TRUE)) %>%
+  ggplot(aes(x = Carrier_Name, y = Average_Cost, fill = Carrier_Name)) +
+  geom_col() +
+  labs(title = "Average Cost per Shipment by Carrier")
+```
+
+## Cost per KG-KM by Carrier
+
+```{r}
+#| label: cost-kgkm-carrier
+#| fig-cap: "Total Cost Per KG-KM by Carrier"
+data %>%
+  group_by(Carrier_Name) %>%
+  summarize(Total_Cost_per_KGKM = sum(cost_per_kgkm, na.rm = TRUE)) %>%
+  ggplot(aes(x = Carrier_Name, y = Total_Cost_per_KGKM, fill = Carrier_Name)) +
+  geom_col() +
+  labs(title = "Total Cost per KG-KM by Carrier")
+```
+
+## Ranking Carriers by Cost Efficiency
+
+```{r}
+#| label: rank-carriers
+#| fig-cap: "Ranking of Carriers by Total Cost Per KG-KM"
+carrier_rank <- data %>%
+  group_by(Carrier_Name) %>%
+  summarize(Total_Cost_per_KGKM = sum(cost_per_kgkm, na.rm = TRUE)) %>%
+  arrange(desc(Total_Cost_per_KGKM))
+
+ggplot(carrier_rank, aes(x = reorder(Carrier_Name, -Total_Cost_per_KGKM), y = Total_Cost_per_KGKM)) +
+  geom_col(fill = "darkblue") +
+  labs(title = "Carrier Ranking by Total Cost per KG-KM")
+```
+
+## How Does Longest Diagonal Impact Cost?
+
+```{r}
+#| label: diag-vs-cost
+#| fig-cap: "Longest Diagonal vs Cost"
+ggplot(data, aes(x = `longest diagonal`, y = Delivery_Cost)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  labs(title = "Longest Diagonal vs Delivery Cost")
+```
+
+# Summary Table
+
+```{r}
+#| label: summary-table
+#| tbl-cap: "Preview of Cleaned Data"
+kable(head(data, 10))
+```
+
+## NOTES 2 SELF:
+
+-   Quarto really helps keep my code and explanation organized in one place, so basically no more flipping between script and doc.
+
+-   Inline chunk labels, fig captions, and YAML options legit make everything more readable...future me will thank me.
+
+-   If I ever need to export this to Word or PDF, it's already set up for that (God bless the YAML section).
+
+-   Overall, in comparison to the previous Whole Game Project, we got a much cleaner doc, clearer thoughts, & less chaos. 10/10 would do again.
